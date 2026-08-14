@@ -18,6 +18,12 @@ function log(...args) {
   console.log("[pack]", ...args);
 }
 
+function capture(event, properties) {
+  if (window.posthog && typeof window.posthog.capture === "function") {
+    window.posthog.capture(event, properties);
+  }
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -227,6 +233,11 @@ function appOpenPack() {
   const pack = generatePack(pools);
   renderPack(pack);
   setStatus(`Pack ${packsOpened} · click a card to flip it`);
+  capture("pack_opened", {
+    pack_type: "Bloomburrow",
+    cards_received: pack.length,
+    pack_number: packsOpened,
+  });
 }
 
 function appFlipCard(cardEl) {
@@ -244,6 +255,11 @@ function appRevealAll() {
     setStatus(packsOpened ? "All cards are already face up." : "Open a pack first.");
     return;
   }
+  capture("pack_revealed_all", {
+    pack_type: "Bloomburrow",
+    cards_remaining: cards.length,
+    pack_number: packsOpened,
+  });
   cards.forEach((cardEl, index) => {
     window.setTimeout(() => appFlipCard(cardEl), index * 70);
   });
