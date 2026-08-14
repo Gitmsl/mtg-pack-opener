@@ -1,6 +1,8 @@
 # Bloomburrow Pack Opener
 
-Static 15-card Play Booster opener for Magic: The Gathering — Bloomburrow (`blb`). Plain HTML, CSS, and JavaScript. No backend and no account.
+V1 side project - made for fun and for testing PostHog.
+
+Static 15-card Play Booster opener for Magic: The Gathering — Bloomburrow (`blb`). 
 
 Card data comes from the [Scryfall API](https://scryfall.com/docs/api). Images are loaded from Scryfall’s CDN.
 
