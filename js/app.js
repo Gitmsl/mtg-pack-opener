@@ -14,6 +14,7 @@ const packEl = document.getElementById("pack");
 
 let pools = null;
 let packsOpened = 0;
+let animatedRevealEnabled = false;
 
 function log(...args) {
   console.log("[pack]", ...args);
@@ -37,12 +38,7 @@ function hasLocalAnimatedRevealOverride() {
 function isAnimatedRevealEnabled() {
   if (prefersReducedMotion()) return false;
   if (hasLocalAnimatedRevealOverride()) return true;
-  if (window.posthog && typeof window.posthog.isFeatureEnabled === "function") {
-    if (posthog.isFeatureEnabled("animated-card-reveal")) {
-      return true;
-    }
-  }
-  return false;
+  return animatedRevealEnabled;
 }
 
 function sleep(ms) {
@@ -303,13 +299,16 @@ window.appFlipCard = appFlipCard;
 window.appRevealAll = appRevealAll;
 
 async function boot() {
-  log("Boot", { animatedCardReveal: isAnimatedRevealEnabled() });
+  log("Boot");
   if (window.posthog && typeof window.posthog.onFeatureFlags === "function") {
-    window.posthog.onFeatureFlags(function onFlags() {
-      log("PostHog flags", {
-        animatedCardReveal: window.posthog.isFeatureEnabled("animated-card-reveal"),
-        flags: window.posthog.getAllFeatureFlags(),
-      });
+    posthog.onFeatureFlags(() => {
+      if (posthog.isFeatureEnabled("animated-card-reveal")) {
+        animatedRevealEnabled = true;
+        log("animated-card-reveal enabled");
+      } else {
+        animatedRevealEnabled = false;
+        log("animated-card-reveal disabled");
+      }
     });
   }
   try {
