@@ -2,6 +2,7 @@ const API = "https://api.scryfall.com";
 const CACHE_KEY = "blb-catalog-v1";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PAGE_DELAY_MS = 550;
+const REVEAL_STAGGER_MS = 80;
 const SEARCHES = [
   { q: "e:blb", extras: false },
   { q: "e:tblb OR e:ablb", extras: true },
@@ -22,6 +23,26 @@ function capture(event, properties) {
   if (window.posthog && typeof window.posthog.capture === "function") {
     window.posthog.capture(event, properties);
   }
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function hasLocalAnimatedRevealOverride() {
+  const value = new URLSearchParams(window.location.search).get("animated-card-reveal");
+  return value === "1" || value === "true";
+}
+
+function isAnimatedRevealEnabled() {
+  if (prefersReducedMotion()) return false;
+  if (hasLocalAnimatedRevealOverride()) return true;
+  if (window.posthog && typeof window.posthog.isFeatureEnabled === "function") {
+    if (posthog.isFeatureEnabled("animated-card-reveal")) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function sleep(ms) {
@@ -209,12 +230,14 @@ function renderPack(pack) {
 
     button.innerHTML = `
       <span class="card-stack">
-        <span class="card-face card-back">
-          <span class="card-back-mark">BLB</span>
-          <span class="card-back-hint">Flip</span>
-        </span>
-        <span class="card-face card-front">
-          <img alt="${entry.card.name.replace(/"/g, "&quot;")}" src="${entry.card.image}" draggable="false">
+        <span class="card-flipper">
+          <span class="card-face card-back">
+            <span class="card-back-mark">BLB</span>
+            <span class="card-back-hint">Flip</span>
+          </span>
+          <span class="card-face card-front">
+            <img alt="${entry.card.name.replace(/"/g, "&quot;")}" src="${entry.card.image}" draggable="false">
+          </span>
         </span>
       </span>
       <span class="card-caption">${entry.label}</span>
@@ -224,7 +247,7 @@ function renderPack(pack) {
 }
 
 function appOpenPack() {
-  log("Open pack clicked", { ready: Boolean(pools) });
+  log("Open pack clicked", { ready: Boolean(pools), animated: isAnimatedRevealEnabled() });
   if (!pools) {
     setStatus("Still loading cards…");
     return;
@@ -243,7 +266,13 @@ function appOpenPack() {
 function appFlipCard(cardEl) {
   log("Flip card", cardEl?.dataset?.label, cardEl?.dataset?.name);
   if (!cardEl || cardEl.classList.contains("revealed")) return;
-  cardEl.classList.add("revealed");
+
+  if (isAnimatedRevealEnabled()) {
+    cardEl.classList.add("revealed");
+  } else {
+    cardEl.classList.add("revealed", "instant");
+  }
+
   cardEl.setAttribute("aria-pressed", "true");
   cardEl.setAttribute("aria-label", `${cardEl.dataset.label}: ${cardEl.dataset.name}`);
 }
@@ -260,9 +289,13 @@ function appRevealAll() {
     cards_remaining: cards.length,
     pack_number: packsOpened,
   });
-  cards.forEach((cardEl, index) => {
-    window.setTimeout(() => appFlipCard(cardEl), index * 70);
-  });
+  if (isAnimatedRevealEnabled()) {
+    cards.forEach((cardEl, index) => {
+      window.setTimeout(() => appFlipCard(cardEl), index * REVEAL_STAGGER_MS);
+    });
+  } else {
+    cards.forEach((cardEl) => appFlipCard(cardEl));
+  }
 }
 
 window.appOpenPack = appOpenPack;
@@ -270,7 +303,15 @@ window.appFlipCard = appFlipCard;
 window.appRevealAll = appRevealAll;
 
 async function boot() {
-  log("Boot");
+  log("Boot", { animatedCardReveal: isAnimatedRevealEnabled() });
+  if (window.posthog && typeof window.posthog.onFeatureFlags === "function") {
+    window.posthog.onFeatureFlags(function onFlags() {
+      log("PostHog flags", {
+        animatedCardReveal: window.posthog.isFeatureEnabled("animated-card-reveal"),
+        flags: window.posthog.getAllFeatureFlags(),
+      });
+    });
+  }
   try {
     const { cards, stale } = await loadCatalog();
     pools = buildPools(cards);
